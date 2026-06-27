@@ -1,0 +1,259 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model user {
+  id                  String       @id
+  name                String?
+  email               String       @unique
+  emailVerified       Boolean      @default(false)
+  image               String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  accounts            account[]
+  receivedInvitations invitation[] @relation("ReceivedInvitations")
+  sentInvitations     invitation[] @relation("SentInvitations")
+  memberships         membership[]
+  sessions            session[]
+}
+
+model session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  user      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+}
+
+model verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([identifier, value])
+}
+
+model organization {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  logo        String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  invitations invitation[]
+  memberships membership[]
+  workspaces  workspace[]
+}
+
+model membership {
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrganizationRole @default(MEMBER)
+  joinedAt       DateTime         @default(now())
+  organization   organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           user             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+}
+
+model workspace {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projects       Project[]
+  repositories    Repository[]
+
+  @@unique([organizationId, slug])
+}
+
+model invitation {
+  id             String           @id @default(cuid())
+  organizationId String
+  email          String
+  role           OrganizationRole @default(MEMBER)
+  token          String           @unique
+  invitedBy      String
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  invitee        user             @relation("ReceivedInvitations", fields: [email], references: [email], onDelete: SetNull)
+  inviter        user             @relation("SentInvitations", fields: [invitedBy], references: [id], onDelete: Cascade)
+  organization   organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, email])
+}
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model Project {
+  id          String           @id @default(cuid())
+  name        String
+  description String?
+  workspaceId String
+  workspace   workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  features    FeatureRequest[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("projects")
+}
+
+model FeatureRequest {
+  id              String   @id @default(cuid())
+  title           String
+  description     String
+  priority        String   @default("MEDIUM")
+  status          String   @default("OPEN")
+  customer        String?
+  aiClarification String?
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdById     String
+  prd             PRD?
+  tasks           Task[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("feature_requests")
+}
+
+model PRD {
+  id          String         @id @default(cuid())
+  content     String
+  featureId   String         @unique
+  feature     FeatureRequest @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  createdById String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@map("prds")
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  status      String   @default("TODO")
+  order       Int      @default(0)
+  featureId   String
+  feature     FeatureRequest @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("tasks")
+}
+
+model GitHubConnection {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  accessToken  String
+  githubLogin  String
+  githubId     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("github_connections")
+}
+
+model Repository {
+  id            String   @id @default(cuid())
+  githubId      String
+  name          String
+  fullName      String
+  description   String?
+  private       Boolean  @default(false)
+  webhookSecret String?
+  webhookId     String?
+  workspaceId   String
+  workspace     workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([workspaceId, githubId])
+  @@map("repositories")
+}
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  repoFullName String
+  prNumber    Int
+  prTitle     String
+  prUrl       String
+  action      String
+  status      String   @default("PENDING")
+  reviewId    String?
+  review      WebhookReview? @relation(fields: [reviewId], references: [id])
+  workspaceId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("webhook_events")
+}
+
+model WebhookReview {
+  id          String   @id @default(cuid())
+  content     String
+  prNumber    Int
+  repoFullName String
+  filesReviewed Int
+  events      WebhookEvent[]
+  createdAt   DateTime @default(now())
+
+  @@map("webhook_reviews")
+}
+
+model Subscription {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  plan           String   @default("FREE")
+  status         String   @default("active")
+  razorpayOrderId String?
+  razorpayPaymentId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("subscriptions")
+}
