@@ -34,8 +34,14 @@ export default function PRDPage({ params }: PRDPageProps) {
   const [isSaved, setIsSaved] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  const { data: feature } = trpc.feature.getById.useQuery({ id: featureId });
-  const { data: existingPrd, refetch } = trpc.prd.getByFeature.useQuery({ featureId });
+  const { data: feature } = trpc.feature.getById.useQuery(
+    { id: featureId },
+    { enabled: !!featureId }
+  );
+  const { data: existingPrd, refetch } = trpc.prd.getByFeature.useQuery(
+    { featureId },
+    { enabled: !!featureId }
+  );
   const savePrd = trpc.prd.save.useMutation({
     onSuccess: () => { setIsSaved(true); toast.success('PRD saved'); refetch(); },
   });
@@ -78,10 +84,15 @@ export default function PRDPage({ params }: PRDPageProps) {
     savePrd.mutate({ featureId, content: prdContent });
   };
 
+  if (!featureId) return (
+    <div className="min-h-screen bg-[#09090B] flex items-center justify-center">
+      <Loader2 className="h-7 w-7 animate-spin text-violet-400" />
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-[#09090B] text-white">
       <div className="max-w-4xl mx-auto px-6 py-10">
-        {/* Header */}
         <div className="flex items-center gap-3 mb-8">
           <Link href={`/dashboard/workspaces/${workspaceId}/projects/${projectId}?org=${orgId}`}>
             <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl">
@@ -120,7 +131,6 @@ export default function PRDPage({ params }: PRDPageProps) {
           </div>
         </div>
 
-        {/* Clarification Banner */}
         {feature?.aiClarification && (
           <div className="rounded-2xl bg-blue-500/5 border border-blue-500/20 p-4 mb-6">
             <p className="text-xs font-semibold text-blue-400 mb-1">AI Clarification Summary</p>
@@ -128,7 +138,6 @@ export default function PRDPage({ params }: PRDPageProps) {
           </div>
         )}
 
-        {/* Empty State */}
         {!prdContent && !isGenerating && (
           <div className="flex flex-col items-center justify-center py-32 gap-6">
             <div className="w-20 h-20 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
@@ -147,7 +156,6 @@ export default function PRDPage({ params }: PRDPageProps) {
           </div>
         )}
 
-        {/* PRD Content */}
         {(prdContent || isGenerating) && (
           <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 backdrop-blur-xl overflow-hidden">
             <div className="p-6">
@@ -160,8 +168,7 @@ export default function PRDPage({ params }: PRDPageProps) {
               )}
               {isGenerating && (
                 <div className="flex items-center gap-2 mt-6 text-sm text-zinc-400 border-t border-zinc-800 pt-4">
-                  <Loader2 className="w-4 h-4 animate-spin text-violet-400" />
-                  Generating PRD...
+                  <Loader2 className="w-4 h-4 animate-spin text-violet-400" />Generating PRD...
                 </div>
               )}
             </div>

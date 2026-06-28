@@ -19,7 +19,10 @@ export default function ClarifyPage({ params }) {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const { data: feature } = trpc.feature.getById.useQuery({ id: featureId });
+  const { data: feature } = trpc.feature.getById.useQuery(
+    { id: featureId },
+    { enabled: !!featureId }
+  );
   const saveClarification = trpc.feature.saveClarification.useMutation({
     onSuccess: () => toast.success('Requirements saved successfully'),
   });
@@ -58,11 +61,16 @@ export default function ClarifyPage({ params }) {
     saveClarification.mutate({ id: featureId, aiClarification: summary });
   };
 
+  if (!featureId) return (
+    <div className="min-h-screen bg-[#09090B] flex items-center justify-center">
+      <Loader2 className="h-7 w-7 animate-spin text-violet-400" />
+    </div>
+  );
+
   return (
     <div className="flex flex-col h-screen bg-[#09090B] text-white">
-      {/* Header */}
       <div className="flex items-center gap-4 px-6 py-4 border-b border-zinc-800 shrink-0">
-        <Link href={'/dashboard/workspaces/' + workspaceId + '/projects/' + projectId + '?org=' + orgId}>
+        <Link href={`/dashboard/workspaces/${workspaceId}/projects/${projectId}?org=${orgId}`}>
           <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl">
             <ArrowLeft className="w-4 h-4 mr-1" />Back
           </Button>
@@ -78,7 +86,6 @@ export default function ClarifyPage({ params }) {
         </div>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
         {messages.length === 0 && !isLoading && (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
@@ -129,7 +136,6 @@ export default function ClarifyPage({ params }) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
       <div className="border-t border-zinc-800 px-6 py-4 shrink-0 space-y-3">
         {isReadyForPRD && (
           <Button onClick={handleSave} disabled={saveClarification.isPending}
