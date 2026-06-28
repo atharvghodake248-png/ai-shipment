@@ -210,6 +210,11 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                     <Link href={`/dashboard/workspaces/${workspaceId}/projects/${projectId}/features/${feature.id}/tasks?org=${orgId}`}>
                       <Button variant="outline" size="sm" className="text-xs">📋 Tasks</Button>
                     </Link>
+                    <Link href={`/dashboard/workspaces/${workspaceId}/projects/${projectId}/features/${feature.id}/approve?org=${orgId}`}>
+                      <Button variant="outline" size="sm" className="text-xs bg-green-50 text-green-700 border-green-200 hover:bg-green-100">
+                        🚀 Approve
+                      </Button>
+                    </Link>
                     <Button
                       variant="ghost"
                       size="sm"
