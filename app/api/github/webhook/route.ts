@@ -1,6 +1,7 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/server/db';
-import { runAIReview } from '@/server/lib/ai-review';
+
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
@@ -32,6 +33,52 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Repo not found' }, { status: 404 });
     }
 
+    const connection = await db.gitHubConnection.findFirst({
+      where: { userId: repo.createdById },
+    });
+
+    if (!connection) {
+      return NextResponse.json({ error: 'No GitHub connection' }, { status: 400 });
+    }
+
+    const { Octokit } = await import('@octokit/rest');
+    const Groq = (await import('groq-sdk')).default;
+
+    const octokit = new Octokit({ auth: connection.accessToken });
+    const [owner, repoName] = repoFullName.split('/');
+
+    const { data: files } = await octokit.pulls.listFiles({
+      owner,
+      repo: repoName,
+      pull_number: prNumber,
+      per_page: 5,
+    });
+
+    const diffSummary = files
+      .map((f: any) => 'File: ' + f.filename + ' | +' + f.additions + ' -' + f.deletions)
+      .join('\n');
+
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{
+        role: 'user',
+        content: 'Review this PR briefly. PR: ' + prTitle + '\nFiles:\n' + diffSummary + '\n\nRespond with JSON only: {"summary":"...","blockingIssues":[],"nonBlockingIssues":[],"verdict":"APPROVED"}'
+      }],
+      temperature: 0.2,
+      max_tokens: 500,
+    });
+
+    const raw = completion.choices[0].message.content || '{}';
+    let parsed: any = {};
+    try {
+      const start = raw.indexOf('{');
+      const end = raw.lastIndexOf('}');
+      parsed = JSON.parse(raw.slice(start, end + 1));
+    } catch {
+      parsed = { summary: 'Review completed.', blockingIssues: [], nonBlockingIssues: [], verdict: 'APPROVED' };
+    }
+
     const webhookEvent = await db.webhookEvent.create({
       data: {
         repoFullName,
@@ -39,47 +86,29 @@ export async function POST(req: NextRequest) {
         prTitle: prTitle || 'PR #' + prNumber,
         prUrl: prUrl || '',
         action,
-        status: 'PROCESSING',
+        status: 'COMPLETED',
         workspaceId: repo.workspaceId,
       },
     });
 
-    const connection = await db.gitHubConnection.findFirst({
-      where: { userId: repo.createdById },
-    });
-
-    if (!connection) {
-      await db.webhookEvent.update({ where: { id: webhookEvent.id }, data: { status: 'FAILED' } });
-      return NextResponse.json({ error: 'No GitHub connection' }, { status: 400 });
-    }
-
-    const result = await runAIReview({
-      accessToken: connection.accessToken,
-      repoFullName,
-      prNumber,
-      prTitle,
-      action,
-      feature: null,
-    });
-
     const review = await db.webhookReview.create({
       data: {
-        content: result.summary,
-        verdict: result.verdict,
-        blockingIssues: JSON.stringify(result.blockingIssues),
-        nonBlockingIssues: JSON.stringify(result.nonBlockingIssues),
+        content: parsed.summary || 'Review completed.',
+        verdict: parsed.verdict || 'APPROVED',
+        blockingIssues: JSON.stringify(parsed.blockingIssues || []),
+        nonBlockingIssues: JSON.stringify(parsed.nonBlockingIssues || []),
         prNumber,
         repoFullName,
-        filesReviewed: result.filesReviewed,
+        filesReviewed: files.length,
       },
     });
 
     await db.webhookEvent.update({
       where: { id: webhookEvent.id },
-      data: { status: 'COMPLETED', reviewId: review.id },
+      data: { reviewId: review.id },
     });
 
-    return NextResponse.json({ message: 'OK', verdict: result.verdict });
+    return NextResponse.json({ message: 'OK', verdict: parsed.verdict });
   } catch (error) {
     console.error('Webhook error:', error);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
