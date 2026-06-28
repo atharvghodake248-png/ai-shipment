@@ -28,17 +28,10 @@ export default function ClarifyPage({ params }) {
     },
   });
 
-  const { messages, input: inputValue, handleInputChange, handleSubmit, isLoading, append } = useChat({
+  const { messages, input: inputValue, handleInputChange, handleSubmit, isLoading } = useChat({
     api: '/api/ai/clarify',
     body: { featureTitle: feature?.title, featureDescription: feature?.description },
   });
-
-  useEffect(() => {
-    if (feature && !started && messages.length === 0) {
-      setStarted(true);
-      append({ role: 'user', content: 'Please clarify requirements for: ' + feature.title });
-    }
-  }, [feature, started, messages.length]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
