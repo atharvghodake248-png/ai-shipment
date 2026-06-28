@@ -82,3 +82,32 @@
     text-wrap: balance;
   }
 }
+
+/* Dark themed scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 #09090b; /* thumb / track */
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #09090b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3f3f46; /* zinc-700 */
+  border-radius: 8px;
+  border: 2px solid #09090b;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #7c3aed; /* violet-600 on hover, matches your accent */
+}
+
+::-webkit-scrollbar-corner {
+  background: #09090b;
+}

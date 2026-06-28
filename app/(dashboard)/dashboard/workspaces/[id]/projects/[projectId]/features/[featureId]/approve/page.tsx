@@ -1,12 +1,12 @@
 // @ts-nocheck
 'use client';
+
 import { use, useState } from 'react';
 import { trpc } from '@/trpc/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, CheckCircle, XCircle, Loader2, Rocket, FileText, ListTodo } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Loader2, Rocket, FileText, ListTodo, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -21,6 +21,7 @@ export default function ApprovePage({ params }) {
 
   const { data: feature, isLoading } = trpc.feature.getById.useQuery({ id: featureId });
   const { data: tasks } = trpc.task.list.useQuery({ featureId });
+
   const updateStatus = trpc.feature.updateStatus.useMutation({
     onSuccess: (_, vars) => {
       const approved = vars.status === 'DONE';
@@ -32,106 +33,125 @@ export default function ApprovePage({ params }) {
 
   const doneTasks = tasks?.filter(t => t.status === 'DONE').length || 0;
   const totalTasks = tasks?.length || 0;
+  const completionPct = totalTasks > 0 ? (doneTasks / totalTasks) * 100 : 0;
 
-  if (isLoading) return <div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+  if (isLoading) return (
+    <div className="min-h-screen bg-[#09090B] flex items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-violet-400" />
+    </div>
+  );
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <Link href={'/dashboard/workspaces/' + workspaceId + '/projects/' + projectId + '?org=' + orgId}>
-          <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" />Back</Button>
-        </Link>
-        <h1 className="text-2xl font-bold">Human Approval</h1>
-        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">Awaiting Review</Badge>
-      </div>
-
-      <div className="space-y-4 mb-6">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <FileText className="w-4 h-4" /> Feature Request
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="font-semibold">{feature?.title}</p>
-            <p className="text-sm text-muted-foreground mt-1">{feature?.description}</p>
-            <div className="flex gap-2 mt-3">
-              <Badge variant="outline">{feature?.priority}</Badge>
-              <Badge variant="outline">{feature?.status}</Badge>
+    <div className="min-h-screen bg-[#09090B] text-white">
+      <div className="max-w-3xl mx-auto px-6 py-10">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-8">
+          <Link href={'/dashboard/workspaces/' + workspaceId + '/projects/' + projectId + '?org=' + orgId}>
+            <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl">
+              <ArrowLeft className="w-4 h-4 mr-1" />Back
+            </Button>
+          </Link>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
+              <Sparkles className="w-5 h-5 text-white" />
             </div>
-          </CardContent>
-        </Card>
+            <div>
+              <h1 className="text-xl font-bold">Human Approval</h1>
+              <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-xs mt-0.5">Awaiting Review</Badge>
+            </div>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <ListTodo className="w-4 h-4" /> Task Completion
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-3">
-              <div className="flex-1 bg-slate-100 rounded-full h-3">
-                <div className="bg-green-500 h-3 rounded-full transition-all" style={{ width: totalTasks ? (doneTasks / totalTasks * 100) + '%' : '0%' }} />
+        <div className="space-y-4 mb-8">
+          {/* Feature Info */}
+          <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 backdrop-blur-xl overflow-hidden">
+            <div className="p-5 border-b border-zinc-800 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-blue-400" />
+              <h2 className="font-semibold text-white text-sm">Feature Request</h2>
+            </div>
+            <div className="p-5">
+              <p className="font-semibold text-white text-base mb-2">{feature?.title}</p>
+              <p className="text-sm text-zinc-500 leading-relaxed mb-4">{feature?.description}</p>
+              <div className="flex gap-2">
+                <Badge className="bg-zinc-800 text-zinc-400 border-zinc-700 text-xs">{feature?.priority}</Badge>
+                <Badge className="bg-zinc-800 text-zinc-400 border-zinc-700 text-xs">{feature?.status}</Badge>
               </div>
-              <span className="text-sm font-medium">{doneTasks}/{totalTasks} done</span>
             </div>
-            <div className="mt-3 space-y-1">
-              {tasks?.map(t => (
-                <div key={t.id} className="flex items-center gap-2 text-sm">
-                  <div className={'w-2 h-2 rounded-full ' + (t.status === 'DONE' ? 'bg-green-500' : t.status === 'IN_PROGRESS' ? 'bg-blue-500' : 'bg-slate-300')} />
-                  <span className={t.status === 'DONE' ? 'line-through text-muted-foreground' : ''}>{t.title}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {feature?.aiClarification && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">AI Clarified Requirements</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{feature.aiClarification}</p>
-            </CardContent>
-          </Card>
+          {/* Task Completion */}
+          <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 backdrop-blur-xl overflow-hidden">
+            <div className="p-5 border-b border-zinc-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ListTodo className="w-4 h-4 text-emerald-400" />
+                <h2 className="font-semibold text-white text-sm">Task Completion</h2>
+              </div>
+              <span className="text-sm font-bold text-white">{doneTasks}/{totalTasks}</span>
+            </div>
+            <div className="p-5">
+              <div className="w-full bg-zinc-800 rounded-full h-2 mb-5 overflow-hidden">
+                <div className="bg-gradient-to-r from-emerald-500 to-teal-500 h-2 rounded-full transition-all duration-700 shadow-lg shadow-emerald-500/30"
+                  style={{ width: `${completionPct}%` }} />
+              </div>
+              <div className="space-y-2">
+                {tasks?.map(t => (
+                  <div key={t.id} className="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-zinc-800/50 transition-colors">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${t.status === 'DONE' ? 'bg-emerald-400' : t.status === 'IN_PROGRESS' ? 'bg-blue-400' : 'bg-zinc-600'}`} />
+                    <span className={t.status === 'DONE' ? 'line-through text-zinc-600' : 'text-zinc-300'}>{t.title}</span>
+                    {t.status === 'DONE' && <CheckCircle className="w-3 h-3 text-emerald-500 ml-auto shrink-0" />}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* AI Clarification */}
+          {feature?.aiClarification && (
+            <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 backdrop-blur-xl overflow-hidden">
+              <div className="p-5 border-b border-zinc-800">
+                <h2 className="font-semibold text-white text-sm">AI Clarified Requirements</h2>
+              </div>
+              <div className="p-5">
+                <p className="text-sm text-zinc-500 whitespace-pre-wrap leading-relaxed">{feature.aiClarification}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Note */}
+          <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 backdrop-blur-xl overflow-hidden">
+            <div className="p-5 border-b border-zinc-800">
+              <h2 className="font-semibold text-white text-sm">Reviewer Note <span className="text-zinc-600 font-normal">(optional)</span></h2>
+            </div>
+            <div className="p-5">
+              <Textarea value={note} onChange={e => setNote(e.target.value)}
+                placeholder="Add a note about your decision..."
+                rows={3}
+                className="bg-zinc-800 border-zinc-700 text-zinc-300 placeholder-zinc-600 rounded-xl focus:border-violet-500 resize-none" />
+            </div>
+          </div>
+        </div>
+
+        {/* Decision */}
+        {decision ? (
+          <div className={`flex items-center justify-center gap-3 p-6 rounded-2xl text-lg font-bold ${decision === 'approved' ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border border-rose-500/30 text-rose-400'}`}>
+            {decision === 'approved' ? <><Rocket className="w-6 h-6" />Feature Shipped! 🎉</> : <><XCircle className="w-6 h-6" />Feature Rejected</>}
+          </div>
+        ) : (
+          <div className="flex gap-3">
+            <Button className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white h-13 text-base font-semibold rounded-xl shadow-xl shadow-emerald-500/20 hover:-translate-y-0.5 transition-all"
+              onClick={() => updateStatus.mutate({ id: featureId, status: 'DONE' })}
+              disabled={updateStatus.isPending}>
+              {updateStatus.isPending ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <CheckCircle className="w-5 h-5 mr-2" />}
+              Approve & Ship
+            </Button>
+            <Button className="flex-1 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 h-13 text-base font-semibold rounded-xl transition-all"
+              onClick={() => updateStatus.mutate({ id: featureId, status: 'OPEN' })}
+              disabled={updateStatus.isPending}>
+              <XCircle className="w-5 h-5 mr-2" />Reject
+            </Button>
+          </div>
         )}
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Reviewer Note (optional)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Add a note about your decision..." rows={3} />
-          </CardContent>
-        </Card>
       </div>
-
-      {decision ? (
-        <div className={'flex items-center justify-center gap-2 p-4 rounded-lg text-lg font-semibold ' + (decision === 'approved' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700')}>
-          {decision === 'approved' ? <><Rocket className="w-5 h-5" /> Feature Shipped! 🎉</> : <><XCircle className="w-5 h-5" /> Feature Rejected</>}
-        </div>
-      ) : (
-        <div className="flex gap-4">
-          <Button
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white h-12 text-base"
-            onClick={() => updateStatus.mutate({ id: featureId, status: 'DONE' })}
-            disabled={updateStatus.isPending}
-          >
-            {updateStatus.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle className="w-5 h-5 mr-2" />}
-            Approve & Ship
-          </Button>
-          <Button
-            variant="outline"
-            className="flex-1 border-red-300 text-red-600 hover:bg-red-50 h-12 text-base"
-            onClick={() => updateStatus.mutate({ id: featureId, status: 'OPEN' })}
-            disabled={updateStatus.isPending}
-          >
-            <XCircle className="w-5 h-5 mr-2" />
-            Reject
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

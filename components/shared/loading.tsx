@@ -15,13 +15,13 @@ export function LoadingSpinner({ size = 'md', className = '' }: LoadingSpinnerPr
   };
 
   return (
-    <Loader2 className={`animate-spin text-primary ${sizeClasses[size]} ${className}`} />
+    <Loader2 className={`animate-spin text-violet-400 ${sizeClasses[size]} ${className}`} />
   );
 }
 
 export function PageLoader() {
   return (
-    <div className="flex min-h-[400px] items-center justify-center">
+    <div className="flex min-h-[400px] items-center justify-center bg-[#09090B]">
       <LoadingSpinner size="lg" />
     </div>
   );
@@ -29,7 +29,7 @@ export function PageLoader() {
 
 export function CardLoader() {
   return (
-    <div className="flex h-48 items-center justify-center rounded-xl border bg-card">
+    <div className="flex h-48 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/70">
       <LoadingSpinner size="md" />
     </div>
   );
@@ -41,6 +41,6 @@ interface SkeletonProps {
 
 export function Skeleton({ className = '' }: SkeletonProps) {
   return (
-    <div className={`animate-pulse rounded-md bg-slate-200 ${className}`} />
+    <div className={`animate-pulse rounded-md bg-zinc-800 ${className}`} />
   );
 }

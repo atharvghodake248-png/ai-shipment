@@ -3,10 +3,8 @@
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { FolderKanban, Plus, Loader2, Settings, ArrowRight } from 'lucide-react';
+import { FolderKanban, Plus, Loader2, ArrowRight, Calendar } from 'lucide-react';
 import { trpc } from '@/trpc/client';
 import { CreateWorkspaceDialog } from '@/components/shared/create-workspace-dialog';
 
@@ -16,51 +14,44 @@ export default function WorkspacesPage() {
   const [createOpen, setCreateOpen] = useState(false);
 
   const { data: organization, isLoading: orgLoading } = trpc.organization.getById.useQuery(
-    { id: orgId! },
-    { enabled: !!orgId }
+    { id: orgId! }, { enabled: !!orgId }
   );
-
   const { data: workspaces, isLoading: wsLoading } = trpc.workspace.list.useQuery(
-    { organizationId: orgId! },
-    { enabled: !!orgId }
+    { organizationId: orgId! }, { enabled: !!orgId }
   );
 
-  if (!orgId) {
-    return (
-      <div className="p-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <FolderKanban className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h1 className="text-2xl font-bold mb-2">No Organization Selected</h1>
-          <p className="text-muted-foreground">
-            Select an organization from the sidebar to view its workspaces.
-          </p>
+  if (!orgId) return (
+    <div className="min-h-screen bg-[#09090B] flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto mb-4">
+          <FolderKanban className="w-7 h-7 text-zinc-600" />
         </div>
+        <p className="text-zinc-400 font-medium">No Organization Selected</p>
+        <p className="text-zinc-600 text-sm mt-1">Select one from the sidebar</p>
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (orgLoading || wsLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  if (orgLoading || wsLoading) return (
+    <div className="min-h-screen bg-[#09090B] flex items-center justify-center">
+      <Loader2 className="h-7 w-7 animate-spin text-violet-400" />
+    </div>
+  );
 
   const canManage = organization?.role === 'OWNER' || organization?.role === 'ADMIN';
 
   return (
-    <div className="p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+    <div className="min-h-screen bg-[#09090B] text-white">
+      <div className="max-w-6xl mx-auto px-6 py-10">
+        <div className="flex items-center justify-between mb-10">
           <div>
-            <h1 className="text-3xl font-bold">Workspaces</h1>
-            <p className="text-muted-foreground">Manage workspaces for {organization?.name}</p>
+            <h1 className="text-3xl font-bold tracking-tight">Workspaces</h1>
+            <p className="text-zinc-500 mt-1">Manage workspaces for {organization?.name}</p>
           </div>
           {canManage && (
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              New Workspace
+            <Button onClick={() => setCreateOpen(true)}
+              className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:opacity-90 text-white rounded-xl font-semibold shadow-xl shadow-violet-500/20 hover:-translate-y-0.5 transition-all">
+              <Plus className="h-4 w-4 mr-2" />New Workspace
             </Button>
           )}
         </div>
@@ -68,74 +59,54 @@ export default function WorkspacesPage() {
         {workspaces && workspaces.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {workspaces.map((ws) => (
-              <Card key={ws.id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <FolderKanban className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-lg">{ws.name}</CardTitle>
-                        <CardDescription className="text-xs">/{ws.slug}</CardDescription>
-                      </div>
+              <div key={ws.id} className="rounded-2xl bg-zinc-900/70 border border-zinc-800 backdrop-blur-xl hover:border-violet-500/40 hover:shadow-xl hover:shadow-violet-500/10 transition-all duration-300 overflow-hidden group">
+                <div className="p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600/20 to-indigo-600/20 border border-violet-500/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <FolderKanban className="h-5 w-5 text-violet-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-white">{ws.name}</h3>
+                      <p className="text-xs text-zinc-600">/{ws.slug}</p>
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground line-clamp-2">
+                  <p className="text-sm text-zinc-500 line-clamp-2 mb-4">
                     {ws.description || 'No description provided'}
                   </p>
-                  <div className="mt-4 flex items-center text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1.5 text-xs text-zinc-600">
+                    <Calendar className="w-3 h-3" />
                     Created {new Date(ws.createdAt).toLocaleDateString()}
                   </div>
-                </CardContent>
-                <CardFooter className="border-t pt-4">
-                  <div className="flex items-center justify-between w-full">
-                    <Link href={`/dashboard/workspaces/${ws.id}?org=${orgId}`}>
-                      <Button variant="ghost" className="gap-2">
-                        View Details
-                        <ArrowRight className="h-4 w-4" />
-                      </Button>
-                    </Link>
-                    {canManage && (
-                      <Link href={`/dashboard/workspaces/${ws.id}/settings?org=${orgId}`}>
-                        <Button variant="ghost" size="icon">
-                          <Settings className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                    )}
-                  </div>
-                </CardFooter>
-              </Card>
+                </div>
+                <div className="border-t border-zinc-800 px-6 py-3">
+                  <Link href={`/dashboard/workspaces/${ws.id}?org=${orgId}`}
+                    className="flex items-center justify-between text-sm text-zinc-400 hover:text-violet-400 transition-colors group/link">
+                    <span>View Details</span>
+                    <ArrowRight className="w-4 h-4 group-hover/link:translate-x-0.5 transition-transform" />
+                  </Link>
+                </div>
+              </div>
             ))}
           </div>
         ) : (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <FolderKanban className="h-12 w-12 text-muted-foreground mb-4" />
-              <CardTitle className="text-xl mb-2">No workspaces yet</CardTitle>
-              <CardDescription className="text-center mb-4">
-                Create your first workspace to start organizing shipments and projects
-              </CardDescription>
-              {canManage && (
-                <Button onClick={() => setCreateOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Workspace
-                </Button>
-              )}
-            </CardContent>
-          </Card>
+          <div className="flex flex-col items-center justify-center py-32 gap-4">
+            <div className="w-20 h-20 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+              <FolderKanban className="w-9 h-9 text-zinc-700" />
+            </div>
+            <div className="text-center">
+              <p className="text-zinc-300 font-semibold text-lg mb-1">No workspaces yet</p>
+              <p className="text-zinc-600 text-sm">Create your first workspace to get started</p>
+            </div>
+            {canManage && (
+              <Button onClick={() => setCreateOpen(true)}
+                className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:opacity-90 text-white rounded-xl mt-2">
+                <Plus className="h-4 w-4 mr-2" />Create Workspace
+              </Button>
+            )}
+          </div>
         )}
       </div>
-
-      {orgId && (
-        <CreateWorkspaceDialog
-          open={createOpen}
-          onOpenChange={setCreateOpen}
-          organizationId={orgId}
-        />
-      )}
+      {orgId && <CreateWorkspaceDialog open={createOpen} onOpenChange={setCreateOpen} organizationId={orgId} />}
     </div>
   );
 }
