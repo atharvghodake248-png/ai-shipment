@@ -1,28 +1,28 @@
 'use client';
-
+ 
 import { use, useState, useRef, useEffect } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { trpc } from '@/trpc/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Send, Bot, User, Loader2, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-
+ 
 interface ClarifyPageProps {
   params: Promise<{ id: string; projectId: string; featureId: string }>;
 }
-
+ 
 export default function ClarifyPage({ params }: ClarifyPageProps) {
   const { id: workspaceId, projectId, featureId } = use(params);
   const searchParams = useSearchParams();
   const orgId = searchParams.get('org');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isSaved, setIsSaved] = useState(false);
-
+ 
   const { data: feature } = trpc.feature.getById.useQuery({ id: featureId });
   const saveClarification = trpc.feature.saveClarification.useMutation({
     onSuccess: () => {
@@ -30,8 +30,8 @@ export default function ClarifyPage({ params }: ClarifyPageProps) {
       toast.success('Requirements saved successfully');
     },
   });
-
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+ 
+  const { messages, input: inputValue, handleInputChange, handleSubmit, isLoading } = useChat({
     api: '/api/ai/clarify',
     body: {
       featureTitle: feature?.title,
@@ -45,34 +45,32 @@ export default function ClarifyPage({ params }: ClarifyPageProps) {
       },
     ],
   });
-
+ 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-
+ 
   const isReadyForPRD = messages.some(
     (m) => m.role === 'assistant' && m.content.includes('Ready to generate PRD')
   );
-
+ 
   const handleSaveAndContinue = () => {
     const clarificationSummary = messages
       .filter((m) => m.role === 'assistant')
       .map((m) => m.content)
       .join('\n\n');
-
+ 
     saveClarification.mutate({
       id: featureId,
       aiClarification: clarificationSummary,
     });
   };
-
+ 
   return (
     <div className="flex flex-col h-screen max-h-screen p-6 max-w-3xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
-        <Link
-          href={`/dashboard/workspaces/${workspaceId}/projects/${projectId}?org=${orgId}`}
-        >
+        <Link href={`/dashboard/workspaces/${workspaceId}/projects/${projectId}?org=${orgId}`}>
           <Button variant="ghost" size="sm">
             <ArrowLeft className="w-4 h-4 mr-1" />
             Back
@@ -91,7 +89,7 @@ export default function ClarifyPage({ params }: ClarifyPageProps) {
           </Badge>
         )}
       </div>
-
+ 
       {/* Feature Context Card */}
       {feature && (
         <Card className="mb-4 bg-slate-50">
@@ -102,7 +100,7 @@ export default function ClarifyPage({ params }: ClarifyPageProps) {
           </CardContent>
         </Card>
       )}
-
+ 
       {/* Chat Messages */}
       <Card className="flex-1 overflow-hidden flex flex-col">
         <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -144,7 +142,7 @@ export default function ClarifyPage({ params }: ClarifyPageProps) {
           )}
           <div ref={messagesEndRef} />
         </CardContent>
-
+ 
         {/* Input */}
         <div className="border-t p-4">
           {isReadyForPRD ? (
@@ -173,13 +171,13 @@ export default function ClarifyPage({ params }: ClarifyPageProps) {
           ) : (
             <form onSubmit={handleSubmit} className="flex gap-2">
               <Input
-                value={input}
+                value={inputValue}
                 onChange={handleInputChange}
                 placeholder="Type your answer..."
                 disabled={isLoading}
                 className="flex-1"
               />
-              <Button type="submit" disabled={isLoading || !input?.trim()} size="icon">
+              <Button type="submit" disabled={isLoading || !inputValue?.trim()} size="icon">
                 <Send className="w-4 h-4" />
               </Button>
             </form>
@@ -189,3 +187,4 @@ export default function ClarifyPage({ params }: ClarifyPageProps) {
     </div>
   );
 }
+ 
