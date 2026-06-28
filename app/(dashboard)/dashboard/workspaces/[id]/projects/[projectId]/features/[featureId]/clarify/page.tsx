@@ -23,6 +23,7 @@ export default function ClarifyPage({ params }: ClarifyPageProps) {
   const orgId = searchParams.get('org');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isSaved, setIsSaved] = useState(false);
+  const [started, setStarted] = useState(false);
  
   const { data: feature } = trpc.feature.getById.useQuery({ id: featureId });
   const saveClarification = trpc.feature.saveClarification.useMutation({
@@ -32,20 +33,24 @@ export default function ClarifyPage({ params }: ClarifyPageProps) {
     },
   });
  
-  const { messages, input: inputValue, handleInputChange, handleSubmit, isLoading } = useChat({
+  const { messages, input: inputValue, handleInputChange, handleSubmit, isLoading, append } = useChat({
     api: '/api/ai/clarify',
     body: {
       featureTitle: feature?.title,
       featureDescription: feature?.description,
     },
-    initialMessages: [
-      {
-        id: 'welcome',
-        role: 'assistant',
-        content: `Hi! I'm here to help clarify the requirements for **"${feature?.title || 'this feature'}"**. Let me ask you a few questions so we can write a great PRD.\n\nFirst — who are the primary users of this feature?`,
-      },
-    ],
   });
+ 
+  // Auto-start conversation when feature loads
+  useEffect(() => {
+    if (feature && !started && messages.length === 0) {
+      setStarted(true);
+      append({
+        role: 'user',
+        content: `Please help me clarify the requirements for this feature: "${feature.title}". Description: "${feature.description || 'No description provided'}"`,
+      });
+    }
+  }, [feature, started, messages.length]);
  
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -105,31 +110,34 @@ export default function ClarifyPage({ params }: ClarifyPageProps) {
       {/* Chat Messages */}
       <Card className="flex-1 overflow-hidden flex flex-col">
         <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.filter(m => m.role === 'assistant').length === 0 && !isLoading && (
+            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+              Starting AI clarification...
+            </div>
+          )}
           {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              {message.role === 'assistant' && (
+            message.role === 'assistant' && (
+              <div key={message.id} className="flex gap-3 justify-start">
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
                   <Bot className="w-4 h-4 text-primary" />
                 </div>
-              )}
-              <div
-                className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                  message.role === 'user'
-                    ? 'bg-primary text-primary-foreground rounded-tr-sm'
-                    : 'bg-slate-100 text-foreground rounded-tl-sm'
-                }`}
-              >
-                {message.content}
+                <div className="max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-slate-100 text-foreground rounded-tl-sm">
+                  {message.content}
+                </div>
               </div>
-              {message.role === 'user' && (
+            )
+          ))}
+          {messages.map((message) => (
+            message.role === 'user' && messages.indexOf(message) > 0 && (
+              <div key={message.id + '_user'} className="flex gap-3 justify-end">
+                <div className="max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed bg-primary text-primary-foreground rounded-tr-sm">
+                  {message.content}
+                </div>
                 <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center shrink-0 mt-1">
                   <User className="w-4 h-4 text-slate-600" />
                 </div>
-              )}
-            </div>
+              </div>
+            )
           ))}
           {isLoading && (
             <div className="flex gap-3 justify-start">
