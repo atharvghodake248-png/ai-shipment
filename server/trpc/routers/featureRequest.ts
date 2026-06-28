@@ -83,4 +83,12 @@ export const featureRequestRouter = createTRPCRouter({
       data: { aiClarification: input.aiClarification },
     });
   }),
+updateStatus: protectedProcedure
+  .input(z.object({ id: z.string(), status: z.string() }))
+  .mutation(async ({ ctx, input }) => {
+    return db.featureRequest.update({
+      where: { id: input.id },
+      data: { status: input.status },
+    });
+  }),
 });

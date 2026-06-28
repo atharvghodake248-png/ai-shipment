@@ -1,5 +1,5 @@
 'use client';
-
+ 
 import { use, useState } from 'react';
 import { trpc } from '@/trpc/client';
 import { Button } from '@/components/ui/button';
@@ -25,39 +25,32 @@ import { Label } from '@/components/ui/label';
 import { Plus, ArrowLeft, Loader2, Inbox } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-
+ 
 interface ProjectPageProps {
   params: Promise<{ id: string; projectId: string }>;
 }
-
+ 
 const PRIORITY_STYLES: Record<string, string> = {
   LOW: 'bg-gray-100 text-gray-700 border-gray-200',
   MEDIUM: 'bg-blue-100 text-blue-700 border-blue-200',
   HIGH: 'bg-orange-100 text-orange-700 border-orange-200',
   CRITICAL: 'bg-red-100 text-red-700 border-red-200',
 };
-
-const STATUS_STYLES: Record<string, string> = {
-  OPEN: 'bg-green-100 text-green-700 border-green-200',
-  IN_PROGRESS: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-  DONE: 'bg-purple-100 text-purple-700 border-purple-200',
-  CLOSED: 'bg-gray-100 text-gray-700 border-gray-200',
-};
-
+ 
 export default function ProjectPage({ params }: ProjectPageProps) {
   const { id: workspaceId, projectId } = use(params);
   const searchParams = useSearchParams();
   const orgId = searchParams.get('org');
-
+ 
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'>('MEDIUM');
   const [customer, setCustomer] = useState('');
-
+ 
   const { data: project, isLoading: projectLoading } = trpc.project.getById.useQuery({ id: projectId });
   const { data: features, isLoading: featuresLoading, refetch } = trpc.feature.list.useQuery({ projectId });
-
+ 
   const createFeature = trpc.feature.create.useMutation({
     onSuccess: () => {
       refetch();
@@ -68,9 +61,10 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       setPriority('MEDIUM');
     },
   });
-
+ 
   const deleteFeature = trpc.feature.delete.useMutation({ onSuccess: refetch });
-
+  const updateStatus = trpc.feature.updateStatus.useMutation({ onSuccess: refetch });
+ 
   if (projectLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -78,7 +72,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       </div>
     );
   }
-
+ 
   return (
     <div className="p-8 max-w-5xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -89,7 +83,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
           </Button>
         </Link>
       </div>
-
+ 
       <div className="flex items-start justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold">{project?.name}</h1>
@@ -129,10 +123,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label>Priority</Label>
-                  <Select
-                    value={priority}
-                    onValueChange={(v) => setPriority(v as typeof priority)}
-                  >
+                  <Select value={priority} onValueChange={(v) => setPriority(v as typeof priority)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -154,32 +145,17 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 </div>
               </div>
               <Button
-                onClick={() =>
-                  createFeature.mutate({
-                    title,
-                    description,
-                    priority,
-                    projectId,
-                    customer: customer || undefined,
-                  })
-                }
+                onClick={() => createFeature.mutate({ title, description, priority, projectId, customer: customer || undefined })}
                 disabled={!title.trim() || !description.trim() || createFeature.isPending}
                 className="w-full"
               >
-                {createFeature.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  'Create Feature Request'
-                )}
+                {createFeature.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</> : 'Create Feature Request'}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
-
+ 
       {featuresLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -201,9 +177,20 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                     <Badge className={PRIORITY_STYLES[feature.priority]} variant="outline">
                       {feature.priority}
                     </Badge>
-                    <Badge className={STATUS_STYLES[feature.status]} variant="outline">
-                      {feature.status.replace('_', ' ')}
-                    </Badge>
+                    <Select
+                      value={feature.status}
+                      onValueChange={(v) => updateStatus.mutate({ id: feature.id, status: v })}
+                    >
+                      <SelectTrigger className="h-7 w-36 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="OPEN">Open</SelectItem>
+                        <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                        <SelectItem value="DONE">Done</SelectItem>
+                        <SelectItem value="CLOSED">Closed</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </CardHeader>
@@ -211,33 +198,17 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 <p className="text-sm text-muted-foreground">{feature.description}</p>
                 <div className="flex items-center justify-between mt-3">
                   {feature.customer ? (
-                    <span className="text-xs text-muted-foreground">
-                      Customer: {feature.customer}
-                    </span>
-                  ) : (
-                    <span />
-                  )}
+                    <span className="text-xs text-muted-foreground">Customer: {feature.customer}</span>
+                  ) : <span />}
                   <div className="flex gap-2 flex-wrap">
-                    <Link
-                      href={`/dashboard/workspaces/${workspaceId}/projects/${projectId}/features/${feature.id}/clarify?org=${orgId}`}
-                    >
-                      <Button variant="outline" size="sm" className="text-xs">
-                        🤖 Clarify with AI
-                      </Button>
+                    <Link href={`/dashboard/workspaces/${workspaceId}/projects/${projectId}/features/${feature.id}/clarify?org=${orgId}`}>
+                      <Button variant="outline" size="sm" className="text-xs">🤖 Clarify with AI</Button>
                     </Link>
-                    <Link
-                      href={`/dashboard/workspaces/${workspaceId}/projects/${projectId}/features/${feature.id}/prd?org=${orgId}`}
-                    >
-                      <Button variant="outline" size="sm" className="text-xs">
-                        📄 View PRD
-                      </Button>
+                    <Link href={`/dashboard/workspaces/${workspaceId}/projects/${projectId}/features/${feature.id}/prd?org=${orgId}`}>
+                      <Button variant="outline" size="sm" className="text-xs">📄 View PRD</Button>
                     </Link>
-                    <Link
-                      href={`/dashboard/workspaces/${workspaceId}/projects/${projectId}/features/${feature.id}/tasks?org=${orgId}`}
-                    >
-                      <Button variant="outline" size="sm" className="text-xs">
-                        📋 Tasks
-                      </Button>
+                    <Link href={`/dashboard/workspaces/${workspaceId}/projects/${projectId}/features/${feature.id}/tasks?org=${orgId}`}>
+                      <Button variant="outline" size="sm" className="text-xs">📋 Tasks</Button>
                     </Link>
                     <Button
                       variant="ghost"
@@ -258,3 +229,4 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     </div>
   );
 }
+ 
