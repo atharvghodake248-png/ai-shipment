@@ -29,19 +29,20 @@ export const featureRequestRouter = createTRPCRouter({
         },
       });
     }),
+
   getById: protectedProcedure
-  .input(z.object({ id: z.string() }))
-  .query(async ({ ctx, input }) => {
-    const feature = await db.featureRequest.findUnique({
-      where: { id: input.id },
-    });
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const feature = await db.featureRequest.findUnique({
+        where: { id: input.id },
+      });
 
-    if (!feature) {
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'Feature not found' });
-    }
+      if (!feature) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Feature not found' });
+      }
 
-    return feature;
-  }),
+      return feature;
+    }),
 
   list: protectedProcedure
     .input(z.object({ projectId: z.string() }))
@@ -49,6 +50,16 @@ export const featureRequestRouter = createTRPCRouter({
       return db.featureRequest.findMany({
         where: { projectId: input.projectId },
         orderBy: { createdAt: 'desc' },
+      });
+    }),
+
+  listByWorkspace: protectedProcedure
+    .input(z.object({ workspaceId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return db.featureRequest.findMany({
+        where: { project: { workspaceId: input.workspaceId } },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, title: true, status: true },
       });
     }),
 
@@ -72,31 +83,24 @@ export const featureRequestRouter = createTRPCRouter({
       return db.featureRequest.delete({ where: { id: input.id } });
     }),
 
-    saveClarification: protectedProcedure
-  .input(z.object({
-    id: z.string(),
-    aiClarification: z.string(),
-  }))
-  .mutation(async ({ ctx, input }) => {
-    return db.featureRequest.update({
-      where: { id: input.id },
-      data: { aiClarification: input.aiClarification },
-    });
-  }),
-updateStatus: protectedProcedure
-  .input(z.object({ id: z.string(), status: z.string() }))
-  .mutation(async ({ ctx, input }) => {
-    return db.featureRequest.update({
-      where: { id: input.id },
-      data: { status: input.status },
-    });
-  }),
-  approve: protectedProcedure
-  .input(z.object({ id: z.string(), approved: z.boolean(), note: z.string().optional() }))
-  .mutation(async ({ ctx, input }) => {
-    return db.featureRequest.update({
-      where: { id: input.id },
-      data: { status: input.approved ? 'DONE' : 'OPEN' },
-    });
-  }),
+  saveClarification: protectedProcedure
+    .input(z.object({
+      id: z.string(),
+      aiClarification: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return db.featureRequest.update({
+        where: { id: input.id },
+        data: { aiClarification: input.aiClarification },
+      });
+    }),
+
+  updateStatus: protectedProcedure
+    .input(z.object({ id: z.string(), status: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return db.featureRequest.update({
+        where: { id: input.id },
+        data: { status: input.status },
+      });
+    }),
 });

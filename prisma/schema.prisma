@@ -152,6 +152,7 @@ model FeatureRequest {
   createdById     String
   prd             PRD?
   tasks           Task[]
+  webhookEvents   WebhookEvent[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -226,6 +227,8 @@ model WebhookEvent {
   status      String   @default("PENDING")
   reviewId    String?
   review      WebhookReview? @relation(fields: [reviewId], references: [id])
+  featureId   String?
+  feature     FeatureRequest? @relation(fields: [featureId], references: [id], onDelete: SetNull)
   workspaceId String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -234,13 +237,16 @@ model WebhookEvent {
 }
 
 model WebhookReview {
-  id          String   @id @default(cuid())
-  content     String
-  prNumber    Int
-  repoFullName String
-  filesReviewed Int
-  events      WebhookEvent[]
-  createdAt   DateTime @default(now())
+  id                String   @id @default(cuid())
+  content           String
+  verdict           String?
+  blockingIssues    String?
+  nonBlockingIssues String?
+  prNumber          Int
+  repoFullName      String
+  filesReviewed     Int
+  events            WebhookEvent[]
+  createdAt         DateTime @default(now())
 
   @@map("webhook_reviews")
 }

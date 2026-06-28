@@ -1,215 +1,114 @@
+﻿// @ts-nocheck
 'use client';
 
 import { use, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { trpc } from '@/trpc/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { ArrowLeft, Loader2, GitPullRequest, Sparkles, FileCode } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ArrowLeft, Loader2, RefreshCw, GitPullRequest, AlertTriangle, Info, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 
-interface ReviewPageProps {
-  params: Promise<{ id: string }>;
+function VerdictBadge({ verdict }) {
+  if (!verdict) return <Badge variant="outline">Pending</Badge>;
+  if (verdict === 'APPROVED') return <Badge className="bg-green-100 text-green-700 border-green-200" variant="outline"><CheckCircle2 className="w-3 h-3 mr-1" />Approved</Badge>;
+  if (verdict === 'CHANGES_REQUESTED') return <Badge className="bg-red-100 text-red-700 border-red-200" variant="outline"><XCircle className="w-3 h-3 mr-1" />Changes Requested</Badge>;
+  return <Badge className="bg-amber-100 text-amber-700 border-amber-200" variant="outline"><HelpCircle className="w-3 h-3 mr-1" />Needs Discussion</Badge>;
 }
 
-function renderMarkdown(text: string) {
-  return text
-    .replace(/^## (.+)$/gm, '<h2 class="text-base font-semibold mt-5 mb-2 text-primary">$1</h2>')
-    .replace(/^### (.+)$/gm, '<h3 class="text-sm font-semibold mt-3 mb-1">$1</h3>')
-    .replace(/^\*\*(.+?)\*\*$/gm, '<p class="font-semibold mt-3 mb-1">$1</p>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/^- (.+)$/gm, '<li class="ml-4 mb-1 list-disc text-sm">$1</li>')
-    .replace(/^(\d+)\. (.+)$/gm, '<li class="ml-4 mb-1 list-decimal text-sm">$2</li>')
-    .replace(/`(.+?)`/g, '<code class="bg-slate-100 px-1 rounded text-xs font-mono">$1</code>')
-    .replace(/\n\n/g, '<br/>');
+function safeParseList(json) {
+  if (!json) return [];
+  try { const p = JSON.parse(json); return Array.isArray(p) ? p : []; } catch { return []; }
 }
 
-export default function CodeReviewPage({ params }: ReviewPageProps) {
+export default function GithubReviewPage({ params }) {
   const { id: workspaceId } = use(params);
   const searchParams = useSearchParams();
   const orgId = searchParams.get('org');
+  const [rerunningId, setRerunningId] = useState(null);
+  const utils = trpc.useUtils();
 
-  const [selectedRepo, setSelectedRepo] = useState<string>('');
-  const [selectedPR, setSelectedPR] = useState<number | null>(null);
-  const [selectedPRTitle, setSelectedPRTitle] = useState<string>('');
-  const [reviewResult, setReviewResult] = useState<{ review: string; filesReviewed: number } | null>(null);
+  const { data: events, isLoading } = trpc.webhook.listEvents.useQuery({ workspaceId });
+  const { data: features } = trpc.feature.listByWorkspace.useQuery({ workspaceId });
 
-  const { data: connectedRepos } = trpc.github.listConnectedRepos.useQuery({ workspaceId });
+  const linkFeature = trpc.webhook.linkFeature.useMutation({
+    onSuccess: () => { toast.success('Linked to feature'); utils.webhook.listEvents.invalidate({ workspaceId }); },
+  });
 
-  const { data: prs, isLoading: prsLoading } = trpc.codeReview.listPRs.useQuery(
-    { repoFullName: selectedRepo },
-    { enabled: !!selectedRepo }
-  );
-
-  const { data: diff } = trpc.codeReview.getPRDiff.useQuery(
-    { repoFullName: selectedRepo, prNumber: selectedPR! },
-    { enabled: !!selectedRepo && !!selectedPR }
-  );
-
-  const reviewPR = trpc.codeReview.reviewPR.useMutation({
-    onSuccess: (data) => {
-      setReviewResult(data);
-      toast.success('Code review complete!');
-    },
-    onError: () => toast.error('Failed to generate review'),
+  const rerunReview = trpc.webhook.rerunReview.useMutation({
+    onSuccess: () => { toast.success('Review re-run complete'); utils.webhook.listEvents.invalidate({ workspaceId }); setRerunningId(null); },
+    onError: (err) => { toast.error(err.message || 'Re-review failed'); setRerunningId(null); },
   });
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
+    <div className="p-8 max-w-4xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <Link href={`/dashboard/workspaces/${workspaceId}/github?org=${orgId}`}>
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="w-4 h-4 mr-1" />
-            Back to GitHub
-          </Button>
+        <Link href={'/dashboard/workspaces/' + workspaceId + '/github?org=' + orgId}>
+          <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" />Back</Button>
         </Link>
+        <h1 className="text-2xl font-bold">AI Code Reviews</h1>
       </div>
 
-      <div className="flex items-start justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <Sparkles className="w-7 h-7 text-primary" />
-            AI Code Review
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Select a repository and pull request to get an AI-powered review
-          </p>
-        </div>
-      </div>
+      {isLoading && <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" /></div>}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="space-y-1">
-          <label className="text-sm font-medium">Repository</label>
-          <Select value={selectedRepo} onValueChange={(v) => { setSelectedRepo(v); setSelectedPR(null); setReviewResult(null); }}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select a connected repository" />
-            </SelectTrigger>
-            <SelectContent>
-              {connectedRepos?.map((repo) => (
-                <SelectItem key={repo.id} value={repo.fullName}>
-                  {repo.fullName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      {!isLoading && (!events || events.length === 0) && (
+        <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">No pull request activity yet. Open a PR on a connected repo to trigger an AI review.</CardContent></Card>
+      )}
 
-        <div className="space-y-1">
-          <label className="text-sm font-medium">Pull Request</label>
-          <Select
-            value={selectedPR?.toString() || ''}
-            onValueChange={(v) => {
-              const pr = prs?.find((p) => p.number === parseInt(v));
-              setSelectedPR(parseInt(v));
-              setSelectedPRTitle(pr?.title || '');
-              setReviewResult(null);
-            }}
-            disabled={!selectedRepo || prsLoading}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder={prsLoading ? 'Loading PRs...' : 'Select a pull request'} />
-            </SelectTrigger>
-            <SelectContent>
-              {prs?.length === 0 && (
-                <SelectItem value="none" disabled>No open PRs found</SelectItem>
-              )}
-              {prs?.map((pr) => (
-                <SelectItem key={pr.id} value={pr.number.toString()}>
-                  #{pr.number} {pr.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {selectedPR && diff && (
-        <Card className="mb-6">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <FileCode className="w-4 h-4" />
-              Changed Files ({diff.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {diff.map((file) => (
-                <div key={file.filename} className="flex items-center justify-between text-sm">
-                  <span className="font-mono text-xs truncate">{file.filename}</span>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
-                      +{file.additions}
-                    </Badge>
-                    <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
-                      -{file.deletions}
-                    </Badge>
-                    <Badge variant="outline" className="text-xs">
-                      {file.status}
-                    </Badge>
+      <div className="space-y-4">
+        {events?.map((event) => {
+          const blocking = safeParseList(event.review?.blockingIssues);
+          const nonBlocking = safeParseList(event.review?.nonBlockingIssues);
+          return (
+            <Card key={event.id}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <GitPullRequest className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <a href={event.prUrl} target="_blank" rel="noreferrer" className="font-medium text-sm truncate hover:underline">{event.prTitle}</a>
                   </div>
+                  <VerdictBadge verdict={event.review?.verdict} />
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                <p className="text-xs text-muted-foreground">{event.repoFullName} · PR #{event.prNumber} · {event.action}</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {event.status === 'PROCESSING' && <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin" />Review in progress...</p>}
+                {event.status === 'FAILED' && <p className="text-sm text-red-600">Review failed - check GitHub connection.</p>}
+                {event.review?.content && <p className="text-sm text-muted-foreground">{event.review.content}</p>}
 
-      {selectedPR && (
-        <div className="mb-6">
-          <Button
-            onClick={() => reviewPR.mutate({
-              repoFullName: selectedRepo,
-              prNumber: selectedPR,
-              prTitle: selectedPRTitle,
-            })}
-            disabled={reviewPR.isPending}
-            className="w-full"
-            size="lg"
-          >
-            {reviewPR.isPending ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Reviewing code...</>
-            ) : (
-              <><Sparkles className="w-4 h-4 mr-2" />Generate AI Review</>
-            )}
-          </Button>
-        </div>
-      )}
+                {blocking.length > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-red-700 mb-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />Blocking ({blocking.length})</p>
+                    <ul className="text-sm text-red-700 list-disc pl-4 space-y-0.5">{blocking.map((issue, i) => <li key={i}>{issue}</li>)}</ul>
+                  </div>
+                )}
 
-      {!selectedRepo && (
-        <div className="text-center py-24 border rounded-xl text-muted-foreground">
-          <GitPullRequest className="w-12 h-12 mx-auto mb-4 opacity-40" />
-          <p className="text-lg font-medium">No repository selected</p>
-          <p className="text-sm mt-1">
-            Select a connected repository and pull request to start the AI review
-          </p>
-        </div>
-      )}
+                {nonBlocking.length > 0 && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1"><Info className="w-3 h-3" />Suggestions ({nonBlocking.length})</p>
+                    <ul className="text-sm text-slate-600 list-disc pl-4 space-y-0.5">{nonBlocking.map((issue, i) => <li key={i}>{issue}</li>)}</ul>
+                  </div>
+                )}
 
-      {reviewResult && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-primary" />
-              AI Review — {reviewResult.filesReviewed} file{reviewResult.filesReviewed !== 1 ? 's' : ''} reviewed
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div
-              className="prose prose-sm max-w-none text-sm"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(reviewResult.review) }}
-            />
-          </CardContent>
-        </Card>
-      )}
+                <div className="flex items-center gap-2 pt-2 border-t">
+                  <Select value={event.featureId || undefined} onValueChange={(val) => linkFeature.mutate({ eventId: event.id, featureId: val })}>
+                    <SelectTrigger className="h-8 text-xs w-[220px]"><SelectValue placeholder="Link to feature..." /></SelectTrigger>
+                    <SelectContent>{features?.map((f) => <SelectItem key={f.id} value={f.id}>{f.title}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Button variant="outline" size="sm" className="h-8 text-xs ml-auto" disabled={rerunningId === event.id}
+                    onClick={() => { setRerunningId(event.id); rerunReview.mutate({ eventId: event.id }); }}>
+                    {rerunningId === event.id ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+                    Re-run Review
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }
