@@ -1,154 +1,218 @@
-// @ts-nocheck
 'use client';
 
 import { use, useState } from 'react';
 import { trpc } from '@/trpc/client';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, CheckCircle, XCircle, Loader2, Rocket, FileText, ListTodo, Sparkles } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Plus, ArrowLeft, Loader2, Inbox, Bot, FileText, CheckSquare, Rocket, Trash2, Sparkles } from 'lucide-react';
 import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+import { useSearchParams } from 'next/navigation';
 
-export default function ApprovePage({ params }) {
-  const { id: workspaceId, projectId, featureId } = use(params);
+interface ProjectPageProps {
+  params: Promise<{ id: string; projectId: string }>;
+}
+
+const PRIORITY_CONFIG = {
+  LOW:      { style: 'bg-zinc-800 text-zinc-400 border-zinc-700',           dot: 'bg-zinc-500' },
+  MEDIUM:   { style: 'bg-blue-500/10 text-blue-400 border-blue-500/30',     dot: 'bg-blue-400' },
+  HIGH:     { style: 'bg-amber-500/10 text-amber-400 border-amber-500/30',  dot: 'bg-amber-400' },
+  CRITICAL: { style: 'bg-rose-500/10 text-rose-400 border-rose-500/30',     dot: 'bg-rose-400' },
+};
+
+const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'DONE', 'CLOSED'];
+
+export default function ProjectPage({ params }: ProjectPageProps) {
+  const { id: workspaceId, projectId } = use(params);
   const searchParams = useSearchParams();
   const orgId = searchParams.get('org');
-  const router = useRouter();
-  const [note, setNote] = useState('');
-  const [decision, setDecision] = useState(null);
 
-  const { data: feature, isLoading } = trpc.feature.getById.useQuery({ id: featureId });
-  const { data: tasks } = trpc.task.list.useQuery({ featureId });
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [priority, setPriority] = useState('MEDIUM');
+  const [customer, setCustomer] = useState('');
 
-  const updateStatus = trpc.feature.updateStatus.useMutation({
-    onSuccess: (_, vars) => {
-      const approved = vars.status === 'DONE';
-      setDecision(approved ? 'approved' : 'rejected');
-      toast.success(approved ? '🚀 Feature approved and shipped!' : '❌ Feature rejected');
-      setTimeout(() => router.push('/dashboard/workspaces/' + workspaceId + '/projects/' + projectId + '?org=' + orgId), 1500);
+  const { data: project, isLoading: projectLoading } = trpc.project.getById.useQuery(
+    { id: projectId },
+    { enabled: !!projectId }
+  );
+  const { data: features, isLoading: featuresLoading, refetch } = trpc.feature.list.useQuery(
+    { projectId },
+    { enabled: !!projectId }
+  );
+
+  const createFeature = trpc.feature.create.useMutation({
+    onSuccess: () => {
+      refetch();
+      setOpen(false);
+      setTitle('');
+      setDescription('');
+      setCustomer('');
+      setPriority('MEDIUM');
     },
   });
+  const deleteFeature = trpc.feature.delete.useMutation({ onSuccess: refetch });
+  const updateStatus = trpc.feature.updateStatus.useMutation({ onSuccess: refetch });
 
-  const doneTasks = tasks?.filter(t => t.status === 'DONE').length || 0;
-  const totalTasks = tasks?.length || 0;
-  const completionPct = totalTasks > 0 ? (doneTasks / totalTasks) * 100 : 0;
-
-  if (isLoading) return (
+  if (projectLoading) return (
     <div className="min-h-screen bg-[#09090B] flex items-center justify-center">
-      <Loader2 className="h-8 w-8 animate-spin text-violet-400" />
+      <Loader2 className="h-7 w-7 animate-spin text-violet-400" />
     </div>
   );
 
+  const base = /dashboard/workspaces//projects//features;
+
   return (
     <div className="min-h-screen bg-[#09090B] text-white">
-      <div className="max-w-3xl mx-auto px-6 py-10">
+      <div className="max-w-5xl mx-auto px-6 py-10">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
-          <Link href={'/dashboard/workspaces/' + workspaceId + '/projects/' + projectId + '?org=' + orgId}>
+          <Link href={/dashboard/workspaces//projects?org=}>
             <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl">
-              <ArrowLeft className="w-4 h-4 mr-1" />Back
+              <ArrowLeft className="w-4 h-4 mr-1" />Projects
             </Button>
           </Link>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">Human Approval</h1>
-              <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-xs mt-0.5">Awaiting Review</Badge>
-            </div>
-          </div>
         </div>
 
-        <div className="space-y-4 mb-8">
-          {/* Feature Info */}
-          <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 backdrop-blur-xl overflow-hidden">
-            <div className="p-5 border-b border-zinc-800 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-blue-400" />
-              <h2 className="font-semibold text-white text-sm">Feature Request</h2>
-            </div>
-            <div className="p-5">
-              <p className="font-semibold text-white text-base mb-2">{feature?.title}</p>
-              <p className="text-sm text-zinc-300 leading-relaxed mb-4">{feature?.description}</p>
-              <div className="flex gap-2">
-                <Badge className="bg-zinc-800 text-zinc-300 border-zinc-700 text-xs">{feature?.priority}</Badge>
-                <Badge className="bg-zinc-800 text-zinc-300 border-zinc-700 text-xs">{feature?.status}</Badge>
-              </div>
-            </div>
+        <div className="flex items-start justify-between mb-10">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">{project?.name}</h1>
+            {project?.description && <p className="text-zinc-500 mt-1">{project.description}</p>}
           </div>
-
-          {/* Task Completion */}
-          <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 backdrop-blur-xl overflow-hidden">
-            <div className="p-5 border-b border-zinc-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ListTodo className="w-4 h-4 text-emerald-400" />
-                <h2 className="font-semibold text-white text-sm">Task Completion</h2>
-              </div>
-              <span className="text-sm font-bold text-white">{doneTasks}/{totalTasks}</span>
-            </div>
-            <div className="p-5">
-              <div className="w-full bg-zinc-800 rounded-full h-2 mb-5 overflow-hidden">
-                <div className="bg-gradient-to-r from-emerald-500 to-teal-500 h-2 rounded-full transition-all duration-700 shadow-lg shadow-emerald-500/30"
-                  style={{ width: `${completionPct}%` }} />
-              </div>
-              <div className="space-y-2">
-                {tasks?.map(t => (
-                  <div key={t.id} className="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-zinc-800/50 transition-colors">
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${t.status === 'DONE' ? 'bg-emerald-400' : t.status === 'IN_PROGRESS' ? 'bg-blue-400' : 'bg-zinc-500'}`} />
-                    <span className={t.status === 'DONE' ? 'line-through text-zinc-500' : 'text-zinc-200'}>{t.title}</span>
-                    {t.status === 'DONE' && <CheckCircle className="w-3 h-3 text-emerald-500 ml-auto shrink-0" />}
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:opacity-90 text-white rounded-xl font-semibold shadow-xl shadow-violet-500/20 hover:-translate-y-0.5 transition-all">
+                <Plus className="w-4 h-4 mr-2" />New Feature Request
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg bg-zinc-950 border-zinc-800 text-white">
+              <DialogHeader>
+                <DialogTitle className="text-white">New Feature Request</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div className="space-y-1.5">
+                  <Label className="text-zinc-400 text-sm">Title</Label>
+                  <Input value={title} onChange={(e) => setTitle(e.target.value)}
+                    placeholder="e.g. Add dark mode support"
+                    className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-600 rounded-xl focus:border-violet-500" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-zinc-400 text-sm">Description</Label>
+                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Describe the feature request in detail..."
+                    rows={4}
+                    className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-600 rounded-xl focus:border-violet-500 resize-none" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-zinc-400 text-sm">Priority</Label>
+                    <Select value={priority} onValueChange={setPriority}>
+                      <SelectTrigger className="bg-zinc-900 border-zinc-800 text-white rounded-xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                        {['LOW','MEDIUM','HIGH','CRITICAL'].map(p => (
+                          <SelectItem key={p} value={p}>{p}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                ))}
+                  <div className="space-y-1.5">
+                    <Label className="text-zinc-400 text-sm">Customer (optional)</Label>
+                    <Input value={customer} onChange={(e) => setCustomer(e.target.value)}
+                      placeholder="Customer name"
+                      className="bg-zinc-900 border-zinc-800 text-white placeholder-zinc-600 rounded-xl focus:border-violet-500" />
+                  </div>
+                </div>
+                <Button
+                  onClick={() => createFeature.mutate({ title, description, priority: priority as any, projectId, customer: customer || undefined })}
+                  disabled={!title.trim() || !description.trim() || createFeature.isPending}
+                  className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:opacity-90 text-white rounded-xl font-semibold">
+                  {createFeature.isPending
+                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</>
+                    : 'Create Feature Request'}
+                </Button>
               </div>
-            </div>
-          </div>
-
-          {/* AI Clarification */}
-          {feature?.aiClarification && (
-            <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 backdrop-blur-xl overflow-hidden">
-              <div className="p-5 border-b border-zinc-800">
-                <h2 className="font-semibold text-white text-sm">AI Clarified Requirements</h2>
-              </div>
-              <div className="p-5">
-                <p className="text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed">{feature.aiClarification}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Note */}
-          <div className="rounded-2xl bg-zinc-900/70 border border-zinc-800 backdrop-blur-xl overflow-hidden">
-            <div className="p-5 border-b border-zinc-800">
-              <h2 className="font-semibold text-white text-sm">Reviewer Note <span className="text-zinc-500 font-normal">(optional)</span></h2>
-            </div>
-            <div className="p-5">
-              <Textarea value={note} onChange={e => setNote(e.target.value)}
-                placeholder="Add a note about your decision..."
-                rows={3}
-                className="bg-zinc-800 border-zinc-700 text-zinc-200 placeholder-zinc-500 rounded-xl focus:border-violet-500 resize-none" />
-            </div>
-          </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
-        {/* Decision */}
-        {decision ? (
-          <div className={`flex items-center justify-center gap-3 p-6 rounded-2xl text-lg font-bold ${decision === 'approved' ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border border-rose-500/30 text-rose-400'}`}>
-            {decision === 'approved' ? <><Rocket className="w-6 h-6" />Feature Shipped! 🎉</> : <><XCircle className="w-6 h-6" />Feature Rejected</>}
+        {/* Feature List */}
+        {featuresLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-6 w-6 animate-spin text-violet-400" />
+          </div>
+        ) : features?.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-32 gap-4">
+            <div className="w-20 h-20 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+              <Inbox className="w-9 h-9 text-zinc-700" />
+            </div>
+            <div className="text-center">
+              <p className="text-zinc-300 font-semibold text-lg">No feature requests yet</p>
+              <p className="text-zinc-600 text-sm mt-1">Click "New Feature Request" above to add your first one</p>
+            </div>
           </div>
         ) : (
-          <div className="flex gap-3">
-            <Button className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white h-12 text-base font-semibold rounded-xl shadow-xl shadow-emerald-500/20 hover:-translate-y-0.5 transition-all"
-              onClick={() => updateStatus.mutate({ id: featureId, status: 'DONE' })}
-              disabled={updateStatus.isPending}>
-              {updateStatus.isPending ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <CheckCircle className="w-5 h-5 mr-2" />}
-              Approve & Ship
-            </Button>
-            <Button className="flex-1 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 h-12 text-base font-semibold rounded-xl transition-all"
-              onClick={() => updateStatus.mutate({ id: featureId, status: 'OPEN' })}
-              disabled={updateStatus.isPending}>
-              <XCircle className="w-5 h-5 mr-2" />Reject
-            </Button>
+          <div className="space-y-3">
+            {features?.map((feature) => {
+              const pc = PRIORITY_CONFIG[feature.priority] || PRIORITY_CONFIG.MEDIUM;
+              return (
+                <div key={feature.id} className="rounded-2xl bg-zinc-900/70 border border-zinc-800 backdrop-blur-xl hover:border-zinc-700 transition-all duration-200 overflow-hidden">
+                  <div className="p-5">
+                    <div className="flex items-start justify-between gap-4 mb-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={w-2 h-2 rounded-full shrink-0 } />
+                        <h3 className="font-semibold text-white text-sm truncate">{feature.title}</h3>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge className={${pc.style} border text-xs}>{feature.priority}</Badge>
+                        <Select value={feature.status} onValueChange={(v) => updateStatus.mutate({ id: feature.id, status: v })}>
+                          <SelectTrigger className="h-7 w-32 text-xs bg-zinc-800 border-zinc-700 text-zinc-300 rounded-lg">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-300">
+                            {STATUS_OPTIONS.map(s => (
+                              <SelectItem key={s} value={s}>{s.replace('_', ' ')}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <p className="text-sm text-zinc-500 mb-4 leading-relaxed pl-4">{feature.description}</p>
+                    <div className="flex items-center justify-between">
+                      {feature.customer
+                        ? <span className="text-xs text-zinc-600 bg-zinc-800 px-2 py-1 rounded-lg">?? {feature.customer}</span>
+                        : <span />}
+                      <div className="flex gap-2 flex-wrap">
+                        {[
+                          { href: ${base}//clarify, icon: <Bot className="w-3 h-3" />, label: 'Clarify AI', style: 'bg-violet-600/10 text-violet-400 border-violet-500/20 hover:bg-violet-600/20' },
+                          { href: ${base}//prd,     icon: <FileText className="w-3 h-3" />, label: 'PRD',        style: 'bg-blue-600/10 text-blue-400 border-blue-500/20 hover:bg-blue-600/20' },
+                          { href: ${base}//tasks,   icon: <CheckSquare className="w-3 h-3" />, label: 'Tasks',   style: 'bg-amber-600/10 text-amber-400 border-amber-500/20 hover:bg-amber-600/20' },
+                          { href: ${base}//approve, icon: <Rocket className="w-3 h-3" />, label: 'Approve',     style: 'bg-emerald-600/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-600/20' },
+                        ].map((action) => (
+                          <Link key={action.label} href={${action.href}?org=}>
+                            <button className={lex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all }>
+                              {action.icon}{action.label}
+                            </button>
+                          </Link>
+                        ))}
+                        <button
+                          onClick={() => deleteFeature.mutate({ id: feature.id })}
+                          disabled={deleteFeature.isPending}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-rose-500/20 text-rose-500 bg-rose-500/5 hover:bg-rose-500/10 transition-all">
+                          <Trash2 className="w-3 h-3" />Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
