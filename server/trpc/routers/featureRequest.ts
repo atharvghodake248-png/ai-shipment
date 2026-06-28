@@ -91,4 +91,12 @@ updateStatus: protectedProcedure
       data: { status: input.status },
     });
   }),
+  approve: protectedProcedure
+  .input(z.object({ id: z.string(), approved: z.boolean(), note: z.string().optional() }))
+  .mutation(async ({ ctx, input }) => {
+    return db.featureRequest.update({
+      where: { id: input.id },
+      data: { status: input.approved ? 'DONE' : 'OPEN' },
+    });
+  }),
 });
