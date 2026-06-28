@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/server/db';
 
 export const maxDuration = 60;
@@ -63,10 +63,10 @@ export async function POST(req: NextRequest) {
       model: 'llama-3.3-70b-versatile',
       messages: [{
         role: 'user',
-        content: 'Review this PR briefly. PR: ' + prTitle + '\nFiles:\n' + diffSummary + '\n\nRespond with JSON only: {"summary":"...","blockingIssues":[],"nonBlockingIssues":[],"verdict":"APPROVED"}'
+        content: 'Review this PR. PR: ' + prTitle + '\nFiles:\n' + diffSummary + '\n\nRespond with JSON only: {"summary":"brief summary","blockingIssues":[],"nonBlockingIssues":[]}'
       }],
       temperature: 0.2,
-      max_tokens: 500,
+      max_tokens: 300,
     });
 
     const raw = completion.choices[0].message.content || '{}';
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       const end = raw.lastIndexOf('}');
       parsed = JSON.parse(raw.slice(start, end + 1));
     } catch {
-      parsed = { summary: 'Review completed.', blockingIssues: [], nonBlockingIssues: [], verdict: 'APPROVED' };
+      parsed = { summary: 'Review completed.', blockingIssues: [], nonBlockingIssues: [] };
     }
 
     const webhookEvent = await db.webhookEvent.create({
@@ -94,9 +94,6 @@ export async function POST(req: NextRequest) {
     const review = await db.webhookReview.create({
       data: {
         content: parsed.summary || 'Review completed.',
-        verdict: parsed.verdict || 'APPROVED',
-        blockingIssues: JSON.stringify(parsed.blockingIssues || []),
-        nonBlockingIssues: JSON.stringify(parsed.nonBlockingIssues || []),
         prNumber,
         repoFullName,
         filesReviewed: files.length,
@@ -108,7 +105,7 @@ export async function POST(req: NextRequest) {
       data: { reviewId: review.id },
     });
 
-    return NextResponse.json({ message: 'OK', verdict: parsed.verdict });
+    return NextResponse.json({ message: 'OK' });
   } catch (error) {
     console.error('Webhook error:', error);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
